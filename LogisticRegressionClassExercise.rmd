@@ -1,0 +1,326 @@
+---
+title: "Logistics Regression Class Exercise"
+author: "Khalid Abdulshafi"
+date: "Feb 8, 2022"
+output: 
+  html_document: 
+    highlight: tango
+    theme: united
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    number_sections: true
+---
+
+> We will do a class exercise in Logistic Regression today. This will also become your submission for the day. We will do this work today in groups of two. Only one submission per team is needed - mention in comments (and in author field above) who all worked on it together.
+
+
+# Titanic Survival Model
+
+We want to find out what factors affected passengers' survival when Titanic sank. As survival is a binary measure, this task is well suited for a Logistic Regression analysis.
+
+# Task A: Load and Explore the Data
+
+Training Data (data for building our model) is saved in the file `TitanicTrain.csv`
+
+You should import TitanicTrain.csv data. Check the structure of the data using str() function. Note the following definitions
+
+- `PClass`: Passenger Class
+- `Sibsp`: Number of Siblings/Spouse aboard
+- `Parch`: Number of Parents/Children aboard
+- `Embarked`: Port of embarkation
+
+Are there variables that are not in the right class? If yes then convert those variables to the correct class. For the purpose of the class exercise, we will keep things simple and not work with the following variables: `Name`, `Ticket` and `Cabin`. Delete these variables.
+
+Are there `NA` values that we need to deal with?
+
+```{r}
+#Enter your code for loading, exploring and cleaning the data here.
+titanic <- read.csv("TitanicTrain.csv")
+```
+
+```{r}
+summary(titanic)
+str(titanic)
+```
+```{r}
+#Cleaning
+titanic$PassengerId <- NULL
+titanic$Name <- NULL
+titanic$Ticket <- NULL
+titanic$Cabin <- NULL
+
+#NA
+titanic[titanic == "NA"] <- NA
+
+#Factoring
+titanic$Pclass = as.factor(titanic$Pclass)
+titanic$Sex = as.factor(titanic$Sex)
+titanic$Embarked = as.factor(titanic$Embarked)
+
+hist(titanic$Age)
+#The distribution is skewed right, so replace any NA values with the median.
+
+replace_NA = function(column, replace) {
+  return(ifelse(is.na(column), replace(column, na.rm = TRUE), column))
+}
+
+titanic$Age = replace_NA(titanic$Age, median)
+
+str(titanic)
+summary(titanic)
+```
+
+# Task B: Build Our Model
+
+Build a logistic regression model with `Survival` as the response variable. In this section, let's first build a main effects model. What variables do you need to include as the predictor variables?
+```{r}
+#Enter your code for your logistic regression model here.
+initial_model = glm(Survived ~ ., data = titanic, family = "binomial")
+summary(initial_model)
+```
+
+Building a model is always only the first step. The more important task is **interpreting** the model - what insights does your model give you?
+
+> By creating a logistical regression model with respects to all variables provided, we discovered that although some variables such as passenger class, sex, age and number of siblings/spouse appeared to be statistically significant (all of which had P-values < 0.05), other variables appeared to have less statistically significant impacts. 
+
+# Task C: Improve Our Model
+
+How can we improve our model. There are several things you can try:
+
+- Do we need any interaction effects?
+- Do any of the variables have non-linear effects - should we include them in the model as a square term?
+
+## Interaction A: Sex and Age
+
+```{r}
+age_sex_interaction_model <- glm(Survived ~ Sex*Age, data=titanic, family = "binomial")
+summary(age_sex_interaction_model)
+```
+
+```{r}
+#define new observation
+new_sex_age_data <- data.frame(Sex="female", Age = 28)
+new_sex_age_data2 <- data.frame(Sex="male", Age = 28)
+new_sex_age_data3 <- data.frame(Sex="female", Age = 38)
+new_sex_age_data4 <- data.frame(Sex="female", Age = 48)
+new_sex_age_data5 <- data.frame(Sex="female", Age = 58)
+new_sex_age_data6 <- data.frame(Sex="female", Age = 68)
+new_sex_age_data7 <- data.frame(Sex="male", Age = 38)
+
+#use model to predict value of survival
+predict(age_sex_interaction_model, new_sex_age_data, type="response")
+predict(age_sex_interaction_model, new_sex_age_data2, type="response")
+predict(age_sex_interaction_model, new_sex_age_data3, type="response")
+predict(age_sex_interaction_model, new_sex_age_data4, type="response")
+predict(age_sex_interaction_model, new_sex_age_data5, type="response")
+predict(age_sex_interaction_model, new_sex_age_data6, type="response")
+predict(age_sex_interaction_model, new_sex_age_data7, type="response")
+```
+
+```{}
+Explanation:
+
+First of all, we see that the interaction term is statistically significant at the 5% significance level (as p-value is <0.05), which justifies the inclusion of the term in the model.
+
+Secondly, we can no longer interpret the model coefficients by only lookng at the R output.
+
+Consequently, based on the R output, we write the regression model mathematically as:
+
+Survived = 0.541-1.38*Sexmale+0.0190*Age-0.0404*Sexmale*Age……… (1)
+
+Now, if a passenger is female (i.e. Sexmale = 0), equation 1 reduces to:
+
+Survived = 0.541-1.38*0+0.0190*Age-0.0404*0*Age = 0.541+0.0190*Age
+
+And if a passenger is male (i.e. Sexmale = 1), equation 1 reduces to:
+
+Survived = 0.541-1.38*1+0.0190*Age-0.0404*1*Age = -0.839 - 0.0214*Age
+
+Interestingly, in this case, at the two levels of Sex, we find two straight lines with different slopes (-0.0214 and 0.0190), which reveals that the lines are not parallel. In the context of our problem, these non-parallel straight lines indicate that the magnitude of the association between Age and Survived depends on the level of Sex. Therefore, we interpret the model coefficients as:
+
+Provided that the passenger is female, one unit increase in Age is, on average, associated with 0.0190 unit increase in survival.
+
+Provided that the passenger is male, one unit increase in Age is, on average, associated with 0.0214 decrease in survival.
+
+As a real-world explanation of the model coefficients, we can say: Survival apparently increases with the increase in Age for passengers who are female than for passengers who are male.
+```
+
+## Interaction B: Sex and Siblings
+```{r}
+# interactions between sex and age 
+sex_siblings_interaction_model = glm(Survived ~ Sex*SibSp, data=titanic, family = "binomial")
+summary(sex_siblings_interaction_model)
+```
+
+```{r}
+#define new observation
+new_sex_siblings_data <- data.frame(Sex="female", SibSp = 0)
+new_sex_siblings_data2 <- data.frame(Sex="male", SibSp = 0)
+new_sex_siblings_data3 <- data.frame(Sex="female", SibSp = 1)
+new_sex_siblings_data4 <- data.frame(Sex="male", SibSp = 1)
+
+
+#use model to predict value of survival
+predict(sex_siblings_interaction_model, new_sex_siblings_data, type="response")
+predict(sex_siblings_interaction_model, new_sex_siblings_data2, type="response")
+predict(sex_siblings_interaction_model, new_sex_siblings_data3, type="response")
+predict(sex_siblings_interaction_model, new_sex_siblings_data4, type="response")
+```
+
+```{}
+Explanation:
+
+As a real-world explanation of the model coefficients, we can say: Survival apparently increases at a higher rate with the increase in siblings for passengers who are female than for passengers who are male. For both females and males, as the number of siblings increase, the rate of survival decreases.
+```
+
+## Interaction C: Sex and Children
+```{r}
+sex_children_interaction_model = glm(Survived ~ Sex*Parch, data=titanic, family = "binomial")
+summary(sex_children_interaction_model)
+```
+
+```{r}
+#define new observation
+new_sex_children_data <- data.frame(Sex="female", Parch = 0)
+new_sex_children_data2 <- data.frame(Sex="male", Parch = 0)
+new_sex_children_data3 <- data.frame(Sex="female", Parch = 1)
+new_sex_children_data4 <- data.frame(Sex="male", Parch = 1)
+
+
+#use model to predict value of survival
+predict(sex_children_interaction_model, new_sex_children_data, type="response")
+predict(sex_children_interaction_model, new_sex_children_data2, type="response")
+predict(sex_children_interaction_model, new_sex_children_data3, type="response")
+predict(sex_children_interaction_model, new_sex_children_data4, type="response")
+```
+
+```{}
+Explanation:
+
+As a real-world explanation of the model coefficients, we can say: Survival apparently increases at a higher rate with the increase in children for passengers who are female than for passengers who are male. For both females and males, as the number of children increase, the rate of survival decreases.
+```
+
+## Interaction D: Sex and Class
+```{r}
+sex_class_interaction_model <- glm(Survived ~ Sex*Pclass, data=titanic, family = "binomial")
+summary(sex_class_interaction_model)
+```
+
+```{r}
+# Scenario #1: female, Pclass1
+new_sex_class_data <- data.frame(Sex="female", Pclass = "1")
+predict(sex_class_interaction_model, new_sex_class_data, type="response")
+
+# Scenario #2: female, Pclass2
+new_sex_class_data2 <- data.frame(Sex="female", Pclass = "2")
+predict(sex_class_interaction_model, new_sex_class_data2, type="response")
+
+# Scenario #3: female, Pclass3
+new_sex_class_data3 <- data.frame(Sex="female", Pclass = "3")
+predict(sex_class_interaction_model, new_sex_class_data3, type="response")
+
+# Scenario #4: male, Pclass1
+new_sex_class_data4 <- data.frame(Sex="male", Pclass = "1")
+predict(sex_class_interaction_model, new_sex_class_data4, type="response")
+
+# Scenario #5: male, Pclass2
+new_sex_class_data5 <- data.frame(Sex="male", Pclass = "2")
+predict(sex_class_interaction_model, new_sex_class_data5, type="response")
+
+# Scenario #6: male, Pclass3
+new_sex_class_data6 <- data.frame(Sex="male", Pclass = "3")
+predict(sex_class_interaction_model, new_sex_class_data6, type="response")
+```
+```{}
+Explanation:
+
+For both females and males, the lower the class, the lower the likelihood of survival. In every passenger class, females are more likely to survive than men. Interestingly, a female in 3rd class is more likely to survive than a male in first class.
+```
+What is your best model? Explain your best model - what are you seeing as significant? What is the interpretation? What does it mean?
+
+```{}
+Enter your text interpretation here.
+
+Interaction D: Sex and Class was the best model because it had the lowest AIC score of all the models. As for explaining my best model, please see the text above.
+```
+
+# Task D: Predict Outcomes in Testing Data
+
+> We will likely not be able to do this during the class exercise. This task is for you to do on your own after the class. 
+
+We have saved a small part of data to test our model. This is the **Testing Data**. We will use this data to see how good of a prediction is made by the model we created in Task D above.
+
+You should do the following:
+
+- Import the testing data in `TitanicTest.csv`
+- Check that you have all the predictor variables. It will natually not have the response variable
+- Do any variable need recoding to match the training dataset? If yes then do the necessary variable recoding
+- Predict the Survival Probability for the Testing Dataset using the model developed on the training dataset in Step C above. Use the `predict` command.
+- Convert probabilities to a a binary outcome (1 for Prob > 0.5, otherwise 0 - or choose your own threshold; this will need an `ifelse` statement)
+
+
+```{r}
+#Enter your code for predicting outcomes in testing data here.
+test <- read.csv("TitanicTest.csv")
+
+#Cleaning
+# test$PassengerId <- NULL
+test$Name <- NULL
+test$Ticket <- NULL
+test$Cabin <- NULL
+
+#NA
+test[test == "NA"] <- NA
+
+#Factoring
+test$Pclass = as.factor(test$Pclass)
+test$Sex = as.factor(test$Sex)
+test$Embarked = as.factor(test$Embarked)
+
+replace_NA = function(column, replace) {
+  return(ifelse(is.na(column), replace(column, na.rm = TRUE), column))
+}
+
+test$Age = replace_NA(test$Age, median)
+```
+
+```{r}
+test$Survived <- ifelse(round(predict(initial_model, test, type="response")) == 0, 0, 1)
+```
+
+```{r}
+#Remove all columns except for PassengerId and Survived
+test[ , 2:8] <- list(NULL)
+```
+
+```{r}
+#Export dataframe to csv
+#Use getwd() to get working directory
+#write.csv(NAME OF IMPORTED DATA SET GOES HERE, "WORKING DIRECTORY\\NAME OF FILE.CSV", row.names = FALSE)
+
+#For example,
+write.csv(test,"C:/Users/kabdu/Documents/Winter 2022/TO 414 001 WN 2022/HW #3\\titanic_test_kaggle_submission.csv", row.names = FALSE)
+```
+
+# Task E: Compete with Rest of the World
+
+What you just did happens to be one of the ongoing competitions at kaggle.com. https://www.kaggle.com/c/titanic has more details. Once you have predicted outcomes on the test data, you need to create a submission file that has two columns: "PasserngerID" and "Survived".
+The second column should have 1 or 0 for survived or not. NA or missing values in this field is not permitted. 
+Create an account at kaggle and upload your solution at https://www.kaggle.com/c/titanic/submit
+
+Kaggle will evaluate your submission and let you know 
+
+1. What is your score (how good is your prediction)
+2. What is your rank among all submissions 
+
+```{}
+Enter here the following:
+1. Your Kaggle Username: khalidabdulshafi
+2. Your Kaggle Rank: 10590
+3. What did you learn in this exercise? Summarize your experience. What can you do better given more time? I learned how to apply a logistic regression model to predict a categorical dependent variable. In this case, I was able to predict survival of passengers of the Titanic with a 76.5% accuracy. Given more time, I can build a better model, and I can land higher up on the leaderboard.
+
+```
+
+
+> When you are done, submit you files (RMD and HTML) to Canvas for our class exercise. Lets see who in class gets the best rank on Kaggle. **There will be a surprise prize for the best submission!**
